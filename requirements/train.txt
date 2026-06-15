@@ -1,0 +1,7 @@
+-r base.txt
+pytest
+exceptiongroup; python_version < "3.11"
+torch
+torchvision
+ultralytics
+wandb
