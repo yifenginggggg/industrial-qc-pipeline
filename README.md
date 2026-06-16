@@ -1,59 +1,62 @@
-# Industrial QC Pipeline
+# 工业产品视觉质检流水线
 
-Industrial surface-defect inspection pipeline built on `KolektorSDD2`, using `YOLO11` for binary defect detection and `U-Net` for pixel-level defect segmentation.
+这是一个面向 `KolektorSDD2` 数据集的工业表面缺陷视觉质检项目，采用 `YOLO11` 完成缺陷二分类检测，采用 `U-Net` 完成像素级缺陷分割。
 
-This repository implements a complete multi-stage workflow for an industrial visual inspection assignment:
+本仓库实现了一套完整的多阶段工业视觉检测流程：
 
-1. `YOLO11` checks whether an image contains a defect.
-2. If a defect is detected, the system expands the detection into one or more ROI regions.
-3. `U-Net` segments the defect on ROI crops from the original image.
-4. The pipeline applies mask post-processing, defect quantification, confidence fusion, and manual-review rules.
-5. The final output includes structured JSON plus visual overlays for qualitative inspection.
+1. `YOLO11` 先判断图像是否存在缺陷。
+2. 如果检测到缺陷，则根据检测框生成一个或多个 ROI 区域。
+3. `U-Net` 在原图 ROI 裁剪区域上执行缺陷分割。
+4. 分割结果经过后处理、缺陷量化、置信度融合和人工复检规则判断。
+5. 最终输出结构化 JSON、掩码图、叠加可视化图，便于分析和展示。
 
-## Features
+## 功能概览
 
-- Two-stage inspection pipeline: `YOLO11 -> ROI -> U-Net`
-- Detection-gated segmentation to avoid unnecessary segmentation on clean samples
-- ROI-based segmentation inference on original image crops, not on YOLO mask images
-- ROI dataset generation for retraining a segmentation model specifically for cropped defect regions
-- Segmentation post-processing with morphological opening/closing and small-component filtering
-- Defect quantification:
-  - defect count
-  - total defect area
-  - area ratio
-  - per-defect bounding box
-  - centroid
-  - length and width estimates
-- Confidence fusion between YOLO confidence and segmentation confidence
-- Manual review mechanism with review reasons such as low fused confidence or weak segmentation support
-- Multi-defect statistics in the final JSON output
-- W&B integration for YOLO and U-Net training
-- ROI vs full-image evaluation script for ablation comparison
+- 两阶段检测流程：`YOLO11 -> ROI -> U-Net`
+- 检测门控分割：只有检测到缺陷时才进入分割阶段
+- 基于原图 ROI 裁剪的分割推理，而不是对 YOLO 生成的掩码图做分割
+- 支持为 ROI 场景重新构建分割训练集并重训练 U-Net
+- 支持分割后处理：
+  - 开运算
+  - 闭运算
+  - 小连通域过滤
+- 支持缺陷量化：
+  - 缺陷数量
+  - 总缺陷面积
+  - 面积占比
+  - 单缺陷包围框
+  - 质心坐标
+  - 长宽估计
+- 支持 YOLO 置信度与分割置信度融合
+- 支持人工复检机制与复检原因输出
+- 支持多缺陷统计
+- 支持 YOLO 与 U-Net 训练接入 W&B
+- 支持 ROI 与非 ROI 的消融对比评估
 
-## Pipeline
+## 流程说明
 
 ```text
-input image
-  -> YOLO11 defect detection
-  -> if no detection: output no_defect
-  -> if detection:
-       expand detections into ROI boxes
-       crop ROI regions from original image
-       run U-Net on each ROI
-       merge ROI probability maps back to full resolution
-       postprocess mask
-       summarize defects
-       export JSON + overlays + masks
+输入图像
+  -> YOLO11 缺陷检测
+  -> 若未检测到缺陷：直接输出 no_defect
+  -> 若检测到缺陷：
+       根据检测框扩展 ROI
+       从原图裁剪 ROI
+       在每个 ROI 上运行 U-Net
+       将 ROI 概率图回填到整图
+       做掩码后处理
+       汇总缺陷统计信息
+       导出 JSON、掩码图和可视化结果
 ```
 
-## Repository Layout
+## 仓库结构
 
 ```text
 industrial_qc_pipeline/
   data/
-    raw/                   # raw KolektorSDD2 or smoke dataset
-    processed/             # YOLO / U-Net / ROI manifests and converted data
-  outputs/                 # training outputs, checkpoints, predictions, evaluations
+    raw/                   # 原始数据集或 smoke 数据
+    processed/             # YOLO / U-Net / ROI 转换结果与清单文件
+  outputs/                 # 训练结果、权重、推理输出、评估结果
   requirements/
   scripts/
     prepare_dataset.py
@@ -68,18 +71,18 @@ industrial_qc_pipeline/
   tests/
 ```
 
-## Verified Capabilities
+## 当前已实现能力
 
-The current codebase already includes these implemented modules:
+当前代码已经实现了以下关键模块：
 
-- ROI box generation and merging: [src/industrial_qc/pipeline.py](src/industrial_qc/pipeline.py#L56)
-- Segmentation post-processing: [src/industrial_qc/pipeline.py](src/industrial_qc/pipeline.py#L69)
-- Confidence fusion, defect quantification, manual review, multi-defect summary: [src/industrial_qc/pipeline.py](src/industrial_qc/pipeline.py#L91)
-- End-to-end inference entrypoint: [scripts/predict_pipeline.py](scripts/predict_pipeline.py#L31)
-- ROI dataset preparation: [scripts/prepare_roi_dataset.py](scripts/prepare_roi_dataset.py)
-- ROI vs full-image ablation evaluation: [scripts/evaluate_roi_vs_full.py](scripts/evaluate_roi_vs_full.py)
+- ROI 框生成与合并：[src/industrial_qc/pipeline.py](src/industrial_qc/pipeline.py#L56)
+- 分割后处理：[src/industrial_qc/pipeline.py](src/industrial_qc/pipeline.py#L69)
+- 置信度融合、缺陷量化、人工复检、多缺陷汇总：[src/industrial_qc/pipeline.py](src/industrial_qc/pipeline.py#L91)
+- 端到端推理入口：[scripts/predict_pipeline.py](scripts/predict_pipeline.py#L31)
+- ROI 数据集构建：[scripts/prepare_roi_dataset.py](scripts/prepare_roi_dataset.py)
+- ROI 与整图分割对比评估：[scripts/evaluate_roi_vs_full.py](scripts/evaluate_roi_vs_full.py)
 
-## Environment Setup
+## 环境配置
 
 ```bash
 python -m venv .venv
@@ -87,45 +90,45 @@ source .venv/bin/activate
 pip install -r requirements/train.txt
 ```
 
-Or use the helper:
+也可以使用辅助脚本：
 
 ```bash
 bash scripts/setup_env.sh
 ```
 
-For offline remote installs with a local wheelhouse:
+如果是离线服务器并且已经准备了本地 wheel 包目录：
 
 ```bash
 bash scripts/setup_env.sh /path/to/wheelhouse
 ```
 
-If the remote server has a broken local DNS stub but outbound access still works, run commands through:
+如果远程服务器本地 DNS 有问题，但外网仍可访问，可以通过下面的方式运行命令：
 
 ```bash
 bash scripts/with_dns.sh python -c "import socket; print(socket.gethostbyname('wandb.ai'))"
 bash scripts/with_dns.sh bash scripts/setup_env.sh
 ```
 
-## Dataset
+## 数据集
 
-Dataset used in this project:
+本项目使用的数据集：
 
 - [Kolektor Surface-Defect Dataset 2](https://datasetninja.com/kolektor-surface-defect-dataset-2)
 
-Expected raw-data location:
+原始数据默认放置位置：
 
 ```text
 data/raw/KolektorSDD2/
 ```
 
-The preparation script converts the dataset into:
+数据准备脚本会将其转换为：
 
-- YOLO detection format under `data/processed/yolo_ksdd2/`
-- U-Net segmentation manifests under `data/processed/unet_ksdd2/`
+- YOLO 检测格式：`data/processed/yolo_ksdd2/`
+- U-Net 分割清单：`data/processed/unet_ksdd2/`
 
-## Prepare Data
+## 数据准备
 
-Prepare the real dataset:
+准备真实数据集：
 
 ```bash
 python scripts/prepare_dataset.py \
@@ -133,15 +136,15 @@ python scripts/prepare_dataset.py \
   --output-dir data/processed
 ```
 
-Prepare a tiny synthetic smoke dataset:
+如果只想先验证通路，可以生成一个很小的 smoke 数据集：
 
 ```bash
 python scripts/prepare_dataset.py --smoke-run
 ```
 
-## Training
+## 模型训练
 
-### Train YOLO11
+### 训练 YOLO11
 
 ```bash
 python scripts/train_yolo.py \
@@ -156,11 +159,11 @@ python scripts/train_yolo.py \
   --wandb-key "$WANDB_API_KEY"
 ```
 
-Output:
+输出位置：
 
-- weights under `outputs/yolo/train/<run-name>/weights/`
+- 权重保存在 `outputs/yolo/train/<run-name>/weights/`
 
-### Train Full-Image U-Net
+### 训练整图版 U-Net
 
 ```bash
 python scripts/train_unet.py \
@@ -175,13 +178,13 @@ python scripts/train_unet.py \
   --wandb-key "$WANDB_API_KEY"
 ```
 
-Output:
+输出位置：
 
-- best checkpoint under `outputs/unet/<run-name>/best.pt`
+- 最优权重保存在 `outputs/unet/<run-name>/best.pt`
 
-### Prepare ROI Segmentation Dataset
+### 构建 ROI 分割训练集
 
-This step converts the full-image segmentation dataset into ROI crops derived from ground-truth defect regions. Negative samples remain as full images.
+这一步会把整图分割数据，转换为基于缺陷区域的 ROI 裁剪样本。负样本保留为整图。
 
 ```bash
 python scripts/prepare_roi_dataset.py \
@@ -193,7 +196,7 @@ python scripts/prepare_roi_dataset.py \
   --roi-min-size 32
 ```
 
-### Train ROI-Retrained U-Net
+### 训练 ROI 重训版 U-Net
 
 ```bash
 python scripts/train_unet.py \
@@ -208,9 +211,9 @@ python scripts/train_unet.py \
   --wandb-key "$WANDB_API_KEY"
 ```
 
-## Inference
+## 推理入口
 
-Single-image pipeline entrypoint:
+单张图像的完整 pipeline 入口如下：
 
 ```bash
 python scripts/predict_pipeline.py \
@@ -231,17 +234,18 @@ python scripts/predict_pipeline.py \
   --output-dir outputs/predictions/example_case
 ```
 
-### Important Logic
+### 当前 pipeline 的核心逻辑
 
-- YOLO decides whether segmentation should run at all.
-- If YOLO finds no defect, the pipeline directly returns `no_defect`.
-- If YOLO finds one or more defects, the pipeline computes ROI boxes from YOLO detections.
-- U-Net segments the original image ROI crops, then maps ROI probability maps back to full-image space.
-- The pipeline does not segment a YOLO-generated mask image.
+- YOLO 先决定是否进入分割阶段。
+- 如果 YOLO 没有检测到缺陷，则直接输出 `no_defect`。
+- 如果 YOLO 检测到缺陷，则根据检测框生成 ROI。
+- U-Net 对原图裁剪得到的 ROI 区域做分割。
+- ROI 概率图会被映射回原图尺寸后再统一后处理。
+- 本项目不是对 YOLO 输出的 mask 图做分割，而是对原图的 ROI 裁剪区域做分割。
 
-## Inference Outputs
+## 推理输出内容
 
-`predict_pipeline.py` writes a folder containing:
+`predict_pipeline.py` 会在输出目录下生成：
 
 - `detections.png`
 - `roi_overlay.png`
@@ -251,7 +255,7 @@ python scripts/predict_pipeline.py \
 - `segmentation_overlay.png`
 - `result.json`
 
-Example `result.json` fields:
+其中 `result.json` 会包含类似下面的字段：
 
 ```json
 {
@@ -282,15 +286,15 @@ Example `result.json` fields:
 }
 ```
 
-## ROI Ablation Evaluation
+## ROI 消融对比评估
 
-To compare:
+如果想比较以下三种策略：
 
-- full-image U-Net
-- ROI inference without retraining
-- ROI inference with ROI retraining
+- 整图版 U-Net
+- 只做 ROI 推理但不重训
+- ROI 重训练后的 U-Net
 
-run:
+可以运行：
 
 ```bash
 python scripts/evaluate_roi_vs_full.py \
@@ -304,69 +308,69 @@ python scripts/evaluate_roi_vs_full.py \
   --output outputs/roi_retrain_comparison.json
 ```
 
-Output:
+输出位置：
 
-- comparison JSON under `outputs/roi_retrain_comparison.json`
+- 对比结果保存在 `outputs/roi_retrain_comparison.json`
 
-## Latest Verified Experimental Result
+## 最近一次已验证实验结果
 
-Latest verified ROI retraining comparison was run on `June 15, 2026` on the test set with:
+最近一次 ROI 重训练对比评估运行于 `2026年6月15日`，测试集统计如下：
 
-- `1004` total test images
-- `110` positive images
-- `89` positive images detected by YOLO at confidence threshold `0.10`
+- 测试集总数：`1004`
+- 正样本数：`110`
+- 在 YOLO 置信度阈值 `0.10` 下被检测到的正样本数：`89`
 
-### Full-image U-Net vs ROI-Retrained U-Net
+### 整图版 U-Net vs ROI 重训版 U-Net
 
-All positive samples:
+在全部正样本上：
 
-- full-image U-Net: `Dice = 0.5727`, `IoU = 0.4745`
-- ROI-retrained U-Net: `Dice = 0.6013`, `IoU = 0.4982`
+- 整图版 U-Net：`Dice = 0.5727`，`IoU = 0.4745`
+- ROI 重训版 U-Net：`Dice = 0.6013`，`IoU = 0.4982`
 
-YOLO-detected positive samples only:
+在被 YOLO 成功检出的正样本上：
 
-- full-image U-Net: `Dice = 0.7079`, `IoU = 0.5864`
-- ROI-retrained U-Net: `Dice = 0.7431`, `IoU = 0.6158`
+- 整图版 U-Net：`Dice = 0.7079`，`IoU = 0.5864`
+- ROI 重训版 U-Net：`Dice = 0.7431`，`IoU = 0.6158`
 
-Per-case comparison:
+按样本逐一比较：
 
-- ROI-retrained better on `52` cases
-- full-image better on `36` cases
-- tie on `22` cases
+- ROI 重训版更好：`52` 张
+- 整图版更好：`36` 张
+- 基本持平：`22` 张
 
-### Legacy ROI Inference Without Retraining
+### 只做 ROI 推理但不重训的旧方案
 
-All positive samples:
+在全部正样本上：
 
-- full-image U-Net: `Dice = 0.5727`
-- legacy ROI inference: `Dice = 0.5414`
+- 整图版 U-Net：`Dice = 0.5727`
+- 未重训 ROI 推理：`Dice = 0.5414`
 
-This verifies an important conclusion:
+这个结果说明了一个很重要的结论：
 
-- ROI cropping alone was not enough
-- ROI retraining was necessary to make ROI segmentation effective
+- 仅仅做 ROI 裁剪并不足以带来提升
+- 必须基于 ROI 数据重新训练 U-Net，ROI 方案才真正有效
 
 ## W&B
 
-Set `WANDB_API_KEY` or pass `--wandb-key` to the training scripts.
+可以通过环境变量 `WANDB_API_KEY` 或训练脚本参数 `--wandb-key` 接入 W&B。
 
-- YOLO training uses Ultralytics W&B logging when login succeeds.
-- U-Net training logs epoch-wise `train_loss`, `val_loss`, `precision`, `recall`, `dice`, and `iou`.
+- YOLO 训练在登录成功后会启用 Ultralytics 的 W&B 记录
+- U-Net 训练会记录每个 epoch 的 `train_loss`、`val_loss`、`precision`、`recall`、`dice`、`iou`
 
-## Tests
+## 测试
 
-Run the local test suite:
+运行本地测试：
 
 ```bash
 pytest tests -q
 ```
 
-Current verified local status:
+当前已验证状态：
 
 - `13 passed`
 
-## Notes
+## 说明
 
-- The YOLO and U-Net train/val/test splits are aligned through the same prepared dataset workflow.
-- ROI U-Net training uses ROI-cropped segmentation manifests derived from the same original split.
-- The repository is designed for remote-server training and local/public code review.
+- YOLO 与 U-Net 的 train / val / test 划分来自同一套数据准备流程，因此划分是对齐的。
+- ROI U-Net 的训练集来自同一原始划分，只是在分割阶段把样本转换为了 ROI 裁剪形式。
+- 该仓库既适合远程服务器训练，也适合公开展示和课程作业提交。
